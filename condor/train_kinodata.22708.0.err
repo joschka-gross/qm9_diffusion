@@ -1,0 +1,100 @@
+wandb: Currently logged in as: joschka (nextaids). Use `wandb login --relogin` to force relogin
+wandb: - Waiting for wandb.init()...wandb: \ Waiting for wandb.init()...wandb: wandb version 0.13.9 is available!  To upgrade, please run:
+wandb:  $ pip install wandb --upgrade
+wandb: Tracking run with wandb version 0.13.5
+wandb: Run data is saved locally in /home/jgross/qm9_diffusion/wandb/run-20230130_105940-1n7h8jir
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run filigreed-kumquat-1
+wandb: ⭐️ View project at https://wandb.ai/nextaids/toy_diffusion
+wandb: 🚀 View run at https://wandb.ai/nextaids/toy_diffusion/runs/1n7h8jir
+/main/home/mambaforge/lib/python3.9/site-packages/torch_geometric/data/dataset.py:150: UserWarning: The `pre_transform` argument differs from the one used in the pre-processed version of this dataset. If you want to make use of another pre-processing technique, make sure to delete 'data/processed' first
+  warnings.warn(
+/main/home/mambaforge/lib/python3.9/site-packages/torch_geometric/data/dataset.py:158: UserWarning: The `pre_filter` argument differs from the one used in the pre-processed version of this dataset. If you want to make use of another pre-fitering technique, make sure to delete '{self.processed_dir}' first
+  warnings.warn(
+Auto select gpus: [0]
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+IPU available: False, using: 0 IPUs
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [GPU-30736615]
+
+  | Name               | Type       | Params
+--------------------------------------------------
+0 | egnn               | EGNN       | 65.8 K
+1 | time_mlp           | Sequential | 20.7 K
+2 | initial_node_embed | Embedding  | 3.2 K 
+--------------------------------------------------
+89.7 K    Trainable params
+3         Non-trainable params
+89.7 K    Total params
+0.359     Total estimated model params size (MB)
+Traceback (most recent call last):
+  File "/home/jgross/qm9_diffusion/train.py", line 28, in <module>
+    trainer.fit(model, data_module)
+  File "/main/home/mambaforge/lib/python3.9/site-packages/pytorch_lightning/trainer/trainer.py", line 696, in fit
+    self._call_and_handle_interrupt(
+  File "/main/home/mambaforge/lib/python3.9/site-packages/pytorch_lightning/trainer/trainer.py", line 650, in _call_and_handle_interrupt
+    return trainer_fn(*args, **kwargs)
+  File "/main/home/mambaforge/lib/python3.9/site-packages/pytorch_lightning/trainer/trainer.py", line 735, in _fit_impl
+    results = self._run(model, ckpt_path=self.ckpt_path)
+  File "/main/home/mambaforge/lib/python3.9/site-packages/pytorch_lightning/trainer/trainer.py", line 1166, in _run
+    results = self._run_stage()
+  File "/main/home/mambaforge/lib/python3.9/site-packages/pytorch_lightning/trainer/trainer.py", line 1252, in _run_stage
+    return self._run_train()
+  File "/main/home/mambaforge/lib/python3.9/site-packages/pytorch_lightning/trainer/trainer.py", line 1283, in _run_train
+    self.fit_loop.run()
+  File "/main/home/mambaforge/lib/python3.9/site-packages/pytorch_lightning/loops/loop.py", line 200, in run
+    self.advance(*args, **kwargs)
+  File "/main/home/mambaforge/lib/python3.9/site-packages/pytorch_lightning/loops/fit_loop.py", line 271, in advance
+    self._outputs = self.epoch_loop.run(self._data_fetcher)
+  File "/main/home/mambaforge/lib/python3.9/site-packages/pytorch_lightning/loops/loop.py", line 200, in run
+    self.advance(*args, **kwargs)
+  File "/main/home/mambaforge/lib/python3.9/site-packages/pytorch_lightning/loops/epoch/training_epoch_loop.py", line 203, in advance
+    batch_output = self.batch_loop.run(kwargs)
+  File "/main/home/mambaforge/lib/python3.9/site-packages/pytorch_lightning/loops/loop.py", line 200, in run
+    self.advance(*args, **kwargs)
+  File "/main/home/mambaforge/lib/python3.9/site-packages/pytorch_lightning/loops/batch/training_batch_loop.py", line 87, in advance
+    outputs = self.optimizer_loop.run(optimizers, kwargs)
+  File "/main/home/mambaforge/lib/python3.9/site-packages/pytorch_lightning/loops/loop.py", line 200, in run
+    self.advance(*args, **kwargs)
+  File "/main/home/mambaforge/lib/python3.9/site-packages/pytorch_lightning/loops/optimization/optimizer_loop.py", line 201, in advance
+    result = self._run_optimization(kwargs, self._optimizers[self.optim_progress.optimizer_position])
+  File "/main/home/mambaforge/lib/python3.9/site-packages/pytorch_lightning/loops/optimization/optimizer_loop.py", line 248, in _run_optimization
+    self._optimizer_step(optimizer, opt_idx, kwargs.get("batch_idx", 0), closure)
+  File "/main/home/mambaforge/lib/python3.9/site-packages/pytorch_lightning/loops/optimization/optimizer_loop.py", line 358, in _optimizer_step
+    self.trainer._call_lightning_module_hook(
+  File "/main/home/mambaforge/lib/python3.9/site-packages/pytorch_lightning/trainer/trainer.py", line 1550, in _call_lightning_module_hook
+    output = fn(*args, **kwargs)
+  File "/main/home/mambaforge/lib/python3.9/site-packages/pytorch_lightning/core/module.py", line 1705, in optimizer_step
+    optimizer.step(closure=optimizer_closure)
+  File "/main/home/mambaforge/lib/python3.9/site-packages/pytorch_lightning/core/optimizer.py", line 168, in step
+    step_output = self._strategy.optimizer_step(self._optimizer, self._optimizer_idx, closure, **kwargs)
+  File "/main/home/mambaforge/lib/python3.9/site-packages/pytorch_lightning/strategies/strategy.py", line 216, in optimizer_step
+    return self.precision_plugin.optimizer_step(model, optimizer, opt_idx, closure, **kwargs)
+  File "/main/home/mambaforge/lib/python3.9/site-packages/pytorch_lightning/plugins/precision/precision_plugin.py", line 153, in optimizer_step
+    return optimizer.step(closure=closure, **kwargs)
+  File "/main/home/mambaforge/lib/python3.9/site-packages/torch/optim/optimizer.py", line 88, in wrapper
+    return func(*args, **kwargs)
+  File "/main/home/mambaforge/lib/python3.9/site-packages/torch/autograd/grad_mode.py", line 27, in decorate_context
+    return func(*args, **kwargs)
+  File "/main/home/mambaforge/lib/python3.9/site-packages/torch/optim/adam.py", line 100, in step
+    loss = closure()
+  File "/main/home/mambaforge/lib/python3.9/site-packages/pytorch_lightning/plugins/precision/precision_plugin.py", line 138, in _wrap_closure
+    closure_result = closure()
+  File "/main/home/mambaforge/lib/python3.9/site-packages/pytorch_lightning/loops/optimization/optimizer_loop.py", line 146, in __call__
+    self._result = self.closure(*args, **kwargs)
+  File "/main/home/mambaforge/lib/python3.9/site-packages/pytorch_lightning/loops/optimization/optimizer_loop.py", line 132, in closure
+    step_output = self._step_fn()
+  File "/main/home/mambaforge/lib/python3.9/site-packages/pytorch_lightning/loops/optimization/optimizer_loop.py", line 407, in _training_step
+    training_step_output = self.trainer._call_strategy_hook("training_step", *kwargs.values())
+  File "/main/home/mambaforge/lib/python3.9/site-packages/pytorch_lightning/trainer/trainer.py", line 1704, in _call_strategy_hook
+    output = fn(*args, **kwargs)
+  File "/main/home/mambaforge/lib/python3.9/site-packages/pytorch_lightning/strategies/strategy.py", line 358, in training_step
+    return self.model.training_step(*args, **kwargs)
+  File "/home/jgross/qm9_diffusion/model.py", line 209, in training_step
+    noised_pos = alpha_bar_t.sqrt() * pos + (1 - alpha_bar_t).sqrt() * eps
+RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!
+wandb: Waiting for W&B process to finish... (failed 1). Press Control-C to abort syncing.
+wandb: - 0.028 MB of 0.028 MB uploaded (0.000 MB deduped)wandb: \ 0.028 MB of 0.037 MB uploaded (0.000 MB deduped)wandb: Synced filigreed-kumquat-1: https://wandb.ai/nextaids/toy_diffusion/runs/1n7h8jir
+wandb: Synced 5 W&B file(s), 0 media file(s), 0 artifact file(s) and 0 other file(s)
+wandb: Find logs at: ./wandb/run-20230130_105940-1n7h8jir/logs

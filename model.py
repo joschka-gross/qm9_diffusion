@@ -181,9 +181,9 @@ class EDM(pl.LightningModule):
     def __init__(self) -> None:
         super().__init__()
         self.T = T
-        self.beta = cosine_beta_schedule(self.T)
-        self.alpha = 1 - self.beta
-        self.alpha_bar = torch.cumprod(self.alpha, 0)
+        self.beta = nn.Parameter(cosine_beta_schedule(self.T), requires_grad=False)
+        self.alpha = nn.Parameter(1 - self.beta, requires_grad=False)
+        self.alpha_bar = nn.Parameter(torch.cumprod(self.alpha, 0), requires_grad=False)
         self.egnn = EGNN()
         self.time_mlp = nn.Sequential(
             SinusoidalPositionEmbedding(HIDDEN_CHANNELS),
@@ -199,7 +199,7 @@ class EDM(pl.LightningModule):
 
     def training_step(self, data, *args, **kwargs):
         batch_size = data.batch.max() + 1
-        t = torch.randint(0, self.T, (batch_size,))
+        t = torch.randint(0, self.T, (batch_size,), device=data.pos.device)
         t_batch = t[data.batch]
         alpha_bar_t = self.alpha_bar[t_batch]
         alpha_bar_t = alpha_bar_t.unsqueeze(1).expand(-1, data.pos.size(1))

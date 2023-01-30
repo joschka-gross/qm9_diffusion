@@ -1,6 +1,7 @@
 data/
 lightning_logs/
 wandb/
+wandb_api_key
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
