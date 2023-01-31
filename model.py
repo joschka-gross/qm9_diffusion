@@ -8,30 +8,8 @@ import math
 
 import pytorch_lightning as pl
 
-from util import centered_pos, nodes_per_graph
-
-MAX_D = 5.0
-HIDDEN_CHANNELS = 128
-TIME_DIM = HIDDEN_CHANNELS * 2
-REDUCE = "sum"
-NUM_LAYERS = 4
-T = 500
-BATCH_SIZE = 64
-LEARNING_RATE = 3e-4
-
-config = {name.lower(): value for name, value in vars().items() if name.upper() == name}
-
-
-def cosine_beta_schedule(timesteps, s=0.008):
-    """
-    cosine schedule as proposed in https://arxiv.org/abs/2102.09672
-    """
-    steps = timesteps + 1
-    x = torch.linspace(0, timesteps, steps)
-    alphas_cumprod = torch.cos(((x / timesteps) + s) / (1 + s) * torch.pi * 0.5) ** 2
-    alphas_cumprod = alphas_cumprod / alphas_cumprod[0]
-    betas = 1 - (alphas_cumprod[1:] / alphas_cumprod[:-1])
-    return torch.clip(betas, 0.0001, 0.9999)
+from util import centered_pos, nodes_per_graph, cosine_beta_schedule
+import config
 
 
 class WithLinearProjection(nn.Module):
@@ -83,35 +61,36 @@ class MessageLayer(nn.Module):
     def __init__(self) -> None:
         super().__init__()
         self.dist_emb = WithLinearProjection(
-            HIDDEN_CHANNELS, ExpnormRBFEmbedding(HIDDEN_CHANNELS, MAX_D)
+            config.HIDDEN_CHANNELS,
+            ExpnormRBFEmbedding(config.HIDDEN_CHANNELS, config.MAX_D),
         )
         self.message_mlp = nn.Sequential(
-            nn.Linear(2 * HIDDEN_CHANNELS, HIDDEN_CHANNELS),
+            nn.Linear(2 * config.HIDDEN_CHANNELS, config.HIDDEN_CHANNELS),
             nn.SiLU(),
-            nn.Linear(HIDDEN_CHANNELS, HIDDEN_CHANNELS),
+            nn.Linear(config.HIDDEN_CHANNELS, config.HIDDEN_CHANNELS),
             nn.SiLU(),
         )
 
         self.gate = nn.Sequential(
-            nn.Linear(HIDDEN_CHANNELS, HIDDEN_CHANNELS), nn.Sigmoid()
+            nn.Linear(config.HIDDEN_CHANNELS, config.HIDDEN_CHANNELS), nn.Sigmoid()
         )
 
         self.time_mlp = nn.Sequential(
-            nn.Linear(TIME_DIM, HIDDEN_CHANNELS * 2),
+            nn.Linear(config.TIME_DIM, config.HIDDEN_CHANNELS * 2),
             nn.SiLU(),
-            nn.Linear(HIDDEN_CHANNELS * 2, HIDDEN_CHANNELS * 2),
+            nn.Linear(config.HIDDEN_CHANNELS * 2, config.HIDDEN_CHANNELS * 2),
         )
 
         self.comb_mlp = nn.Sequential(
-            nn.Linear(2 * HIDDEN_CHANNELS, HIDDEN_CHANNELS),
+            nn.Linear(2 * config.HIDDEN_CHANNELS, config.HIDDEN_CHANNELS),
             nn.SiLU(),
-            nn.Linear(HIDDEN_CHANNELS, HIDDEN_CHANNELS),
+            nn.Linear(config.HIDDEN_CHANNELS, config.HIDDEN_CHANNELS),
         )
 
         self.coord_message_mlp = nn.Sequential(
-            nn.Linear(HIDDEN_CHANNELS, HIDDEN_CHANNELS),
+            nn.Linear(config.HIDDEN_CHANNELS, config.HIDDEN_CHANNELS),
             nn.SiLU(),
-            nn.Linear(HIDDEN_CHANNELS, 1),
+            nn.Linear(config.HIDDEN_CHANNELS, 1),
         )
 
     def forward(
@@ -121,8 +100,8 @@ class MessageLayer(nn.Module):
         # diffusion time step interacts with node features
         scale_shift = self.time_mlp(time)
         scale_shift = scale_shift[batch]
-        scale = scale_shift[:, :HIDDEN_CHANNELS]
-        shift = scale_shift[:, HIDDEN_CHANNELS:]
+        scale = scale_shift[:, : config.HIDDEN_CHANNELS]
+        shift = scale_shift[:, config.HIDDEN_CHANNELS :]
         x = silu(x * (1 + scale) + shift)
 
         # node features and positions and distances for all edges
@@ -138,7 +117,7 @@ class MessageLayer(nn.Module):
         )
 
         m_i = x.new_zeros(x.size())
-        scatter(m_ij, j, dim=0, out=m_i, reduce=REDUCE)
+        scatter(m_ij, j, dim=0, out=m_i, reduce=config.REDUCE)
 
         x = silu(x + self.comb_mlp(torch.cat((x, m_i), dim=1)))
 
@@ -153,7 +132,7 @@ class MessageLayer(nn.Module):
 class EGNN(nn.Module):
     def __init__(self) -> None:
         super().__init__()
-        self.layers = nn.ModuleList([MessageLayer() for _ in range(NUM_LAYERS)])
+        self.layers = nn.ModuleList([MessageLayer() for _ in range(config.NUM_LAYERS)])
 
     def forward(self, x, pos, t, batch):
         for layer in self.layers:
@@ -180,18 +159,18 @@ class SinusoidalPositionEmbedding(nn.Module):
 class EDM(pl.LightningModule):
     def __init__(self) -> None:
         super().__init__()
-        self.T = T
+        self.T = config.T
         self.beta = nn.Parameter(cosine_beta_schedule(self.T), requires_grad=False)
         self.alpha = nn.Parameter(1 - self.beta, requires_grad=False)
         self.alpha_bar = nn.Parameter(torch.cumprod(self.alpha, 0), requires_grad=False)
         self.egnn = EGNN()
         self.time_mlp = nn.Sequential(
-            SinusoidalPositionEmbedding(HIDDEN_CHANNELS),
-            nn.Linear(HIDDEN_CHANNELS, TIME_DIM),
+            SinusoidalPositionEmbedding(config.HIDDEN_CHANNELS),
+            nn.Linear(config.HIDDEN_CHANNELS, config.TIME_DIM),
             nn.GELU(),
-            nn.Linear(TIME_DIM, TIME_DIM),
+            nn.Linear(config.TIME_DIM, config.TIME_DIM),
         )
-        self.initial_node_embed = nn.Embedding(100, HIDDEN_CHANNELS)
+        self.initial_node_embed = nn.Embedding(100, config.HIDDEN_CHANNELS)
 
     @torch.no_grad()
     def sample(self):
@@ -199,22 +178,15 @@ class EDM(pl.LightningModule):
 
     def training_step(self, data, *args, **kwargs):
         batch_size = data.batch.max() + 1
-        t = torch.randint(0, self.T, (batch_size,), device=data.pos.device)
-        t_batch = t[data.batch]
-        alpha_bar_t = self.alpha_bar[t_batch]
-        alpha_bar_t = alpha_bar_t.unsqueeze(1).expand(-1, data.pos.size(1))
-        eps = torch.randn_like(data.pos)
-
-        pos = centered_pos(data.pos, data.batch)
-        noised_pos = alpha_bar_t.sqrt() * pos + (1 - alpha_bar_t).sqrt() * eps
 
         x = self.initial_node_embed(data.z)
-        t_emb = self.time_mlp(t.float())
-        _, eps_pred = self.egnn(x, noised_pos, t_emb, data.batch)
+        t_emb = self.time_mlp(data.t.float())
+        _, eps_pred = self.egnn(x, data.perturbed_pos, t_emb, data.batch)
 
         loss = scatter(
-            (eps - eps_pred).pow(2).sum(dim=1).sqrt(), data.batch, 0, reduce="sum"
+            (data.eps - eps_pred).pow(2).sum(dim=1).sqrt(), data.batch, 0, reduce="sum"
         )
+
         N = nodes_per_graph(data.batch)
         loss = loss / N
         loss = loss.mean()
@@ -222,4 +194,4 @@ class EDM(pl.LightningModule):
         return loss
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=LEARNING_RATE)
+        return torch.optim.Adam(self.parameters(), lr=config.LEARNING_RATE)
