@@ -11,12 +11,12 @@ import pytorch_lightning as pl
 from util import centered_pos, nodes_per_graph
 
 MAX_D = 5.0
-HIDDEN_CHANNELS = 32
-TIME_DIM = HIDDEN_CHANNELS * 4
+HIDDEN_CHANNELS = 128
+TIME_DIM = HIDDEN_CHANNELS * 2
 REDUCE = "sum"
-NUM_LAYERS = 3
-T = 100
-BATCH_SIZE = 32
+NUM_LAYERS = 4
+T = 500
+BATCH_SIZE = 64
 LEARNING_RATE = 3e-4
 
 config = {name.lower(): value for name, value in vars().items() if name.upper() == name}

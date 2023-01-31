@@ -21,7 +21,7 @@ if __name__ == "__main__":
     trainer = pl.Trainer(
         logger=logger,
         auto_select_gpus=True,
-        max_epochs=100,
+        max_epochs=300,
         accelerator="gpu",
     )
 
