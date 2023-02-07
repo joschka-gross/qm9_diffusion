@@ -1,15 +1,19 @@
-import torch
-from torch import Tensor, LongTensor
-import torch.nn as nn
-from torch_cluster import radius_graph
-from torch_scatter import scatter
-from torch.nn.functional import silu
 import math
+import wandb
 
 import pytorch_lightning as pl
+import torch
+import torch.nn as nn
+from torch import LongTensor, Tensor
+from torch.nn.functional import silu, pad
+from torch_cluster import radius_graph
+from torch_scatter import scatter
+from torch_geometric.data import Data
 
-from util import centered_pos, nodes_per_graph, cosine_beta_schedule
 import config
+from util import centered_pos, cosine_beta_schedule, nodes_per_graph
+from visualization import plot_point_cloud_3d
+import matplotlib.pyplot as plt
 
 
 class WithLinearProjection(nn.Module):
@@ -159,10 +163,7 @@ class SinusoidalPositionEmbedding(nn.Module):
 class EDM(pl.LightningModule):
     def __init__(self) -> None:
         super().__init__()
-        self.T = config.T
-        self.beta = nn.Parameter(cosine_beta_schedule(self.T), requires_grad=False)
-        self.alpha = nn.Parameter(1 - self.beta, requires_grad=False)
-        self.alpha_bar = nn.Parameter(torch.cumprod(self.alpha, 0), requires_grad=False)
+        self._initialize_variance_schedule()
         self.egnn = EGNN()
         self.time_mlp = nn.Sequential(
             SinusoidalPositionEmbedding(config.HIDDEN_CHANNELS),
@@ -172,26 +173,88 @@ class EDM(pl.LightningModule):
         )
         self.initial_node_embed = nn.Embedding(100, config.HIDDEN_CHANNELS)
 
-    @torch.no_grad()
-    def sample(self):
-        ...
+    def _initialize_variance_schedule(self):
+        self.T = config.T
+        self.beta = nn.Parameter(cosine_beta_schedule(self.T), requires_grad=False)
+        self.alpha = nn.Parameter(1 - self.beta, requires_grad=False)
+        self.alpha_bar = nn.Parameter(torch.cumprod(self.alpha, 0), requires_grad=False)
+        self.alpha_bar_prev = nn.Parameter(
+            pad(torch.cumprod(self.alpha, 0)[:-1], (1, 0), value=1.0),
+            requires_grad=False,
+        )
+        self.posterior_std = (
+            self.beta * (1 - self.alpha_bar_prev) / (1 - self.alpha_bar)
+        ).sqrt()
 
-    def training_step(self, data, *args, **kwargs):
-        batch_size = data.batch.max() + 1
+    def configure_optimizers(self):
+        return torch.optim.Adam(self.parameters(), lr=config.LEARNING_RATE)
 
-        x = self.initial_node_embed(data.z)
-        t_emb = self.time_mlp(data.t.float())
-        _, eps_pred = self.egnn(x, data.perturbed_pos, t_emb, data.batch)
+    def forward(self, perturbed_data: Data) -> Tensor:
+        x = self.initial_node_embed(perturbed_data.z)
+        t_emb = self.time_mlp(perturbed_data.t.float())
+        _, eps_pred = self.egnn(
+            x, perturbed_data.perturbed_pos, t_emb, perturbed_data.batch
+        )
+        return eps_pred
+
+    def training_step(self, perturbed_data, *args, **kwargs):
+        batch_size = perturbed_data.batch.max() + 1
+
+        eps_pred = self.forward(perturbed_data)
 
         loss = scatter(
-            (data.eps - eps_pred).pow(2).sum(dim=1).sqrt(), data.batch, 0, reduce="sum"
+            (perturbed_data.eps - eps_pred).pow(2).sum(dim=1).sqrt(),
+            perturbed_data.batch,
+            0,
+            reduce="sum",
         )
 
-        N = nodes_per_graph(data.batch)
+        N = nodes_per_graph(perturbed_data.batch)
         loss = loss / N
         loss = loss.mean()
         self.log("train_loss", loss, batch_size=batch_size, on_epoch=True)
         return loss
 
-    def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=config.LEARNING_RATE)
+    def predict_mean_pos(self, data: Data) -> Data:
+        eps_pred = self.forward(data)
+
+        t_expanded_to_node = data.t[data.batch]
+        alpha_t = self.alpha[t_expanded_to_node].unsqueeze(1)
+        alpha_bar_t = self.alpha_bar[t_expanded_to_node].unsqueeze(1)
+        beta_t = self.beta[t_expanded_to_node].unsqueeze(1)
+
+        delta = data.perturbed_pos - (beta_t / (1 - alpha_bar_t).sqrt()) * eps_pred
+        return (1 / alpha_t.sqrt()) * delta
+
+    def _sample_step(self, data: Data) -> Data:
+        data.perturbed_pos = centered_pos(data.perturbed_pos, data.batch)
+        mean_pos = self.predict_mean_pos(data)
+        noise = torch.randn_like(mean_pos)
+
+        t_expanded = data.t[data.batch]
+        sigma_t = self.posterior_std[t_expanded]
+        new_pos = mean_pos + sigma_t.unsqueeze(1) * noise
+        data.perturbed_pos = new_pos
+        return data
+
+    @torch.no_grad()
+    def sample(self, perturbed_data: Data) -> Data:
+        assert (perturbed_data.t == self.T - 1).all(), (self.T, perturbed_data.t)
+        while (perturbed_data.t > 0).any():
+            perturbed_data = self._sample_step(perturbed_data)
+            perturbed_data.t = perturbed_data.t - 1
+        return self.predict_mean_pos(perturbed_data)
+
+    def validation_step(self, perturbed_data, data_idx, *args, **kwargs):
+        if data_idx == 0:
+            denoised_pos = self.sample(perturbed_data)
+            batch_idx_zero = torch.where(perturbed_data.batch == 0)
+
+            pos = denoised_pos[batch_idx_zero].detach().view(3, -1).numpy()
+            color = perturbed_data.z[batch_idx_zero].detach().numpy()
+
+            fig = plt.figure()
+            ax = plot_point_cloud_3d(fig, 111, color, pos)
+            img = wandb.Image(fig)
+            wandb.log({"recon": img})
+        return

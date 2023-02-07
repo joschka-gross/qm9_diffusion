@@ -4,9 +4,15 @@ from torch import Tensor, LongTensor
 from torch_scatter import scatter
 
 
-def nodes_per_graph(batch: LongTensor):
-    n = torch.ones_like(batch)
-    return scatter(n, batch, 0, reduce="sum")
+def nodes_per_graph(index: LongTensor):
+    n = torch.ones_like(index)
+    return scatter(n, index, 0, reduce="sum")
+
+
+def expand_to_pos_shape(
+    batch_level_attribute: Tensor, index: Tensor, num_spatial_dims: int = 3
+) -> Tensor:
+    return batch_level_attribute[index].unsqueeze(-1).expand(-1, num_spatial_dims)
 
 
 def centered_pos(pos: Tensor, batch: Optional[LongTensor] = None) -> Tensor:

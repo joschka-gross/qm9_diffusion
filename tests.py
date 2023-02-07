@@ -1,5 +1,6 @@
 import torch
 import math
+import config
 
 from model import EDM
 from util import rmsd, kabsch_alignment
@@ -39,9 +40,27 @@ def test_kabsch():
 
     P_ = kabsch_alignment(P, Q)
     assert torch.allclose(P_, Q)
-    pass
+
+
+def test_sample():
+    model = EDM()
+    perturb = PerturbNodePositions(model.alpha_bar, t=config.T)
+
+    data1 = Data(
+        z=torch.tensor([1, 1, 1, 1, 6]).long(),
+        pos=torch.tensor(
+            [[1, 1, 0], [1, 2, 0], [2, 1, 0], [-1, 2, 0], [0, -1, 0]]
+        ).float(),
+    )
+    data2 = data1.clone()
+    data1 = perturb(data1)
+    data2 = perturb(data2)
+    batch = Batch.from_data_list([data1, data2])
+
+    model.validation_step(batch)
 
 
 if __name__ == "__main__":
-    test_dummy()
+    test_sample()
     test_kabsch()
+    test_dummy()
